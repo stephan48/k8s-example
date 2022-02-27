@@ -1,0 +1,290 @@
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+    name: k8sexample-frontend-sa
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: k8sexample-frontend-pod-reader
+  namespace: ingress-nginx
+rules:
+- apiGroups: [""] # "" indicates the core API group
+  resources: ["pods"]
+  verbs: ["get", "watch", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: k8sexample-frontend-pod-reader
+rules:
+- apiGroups: [""] # "" indicates the core API group
+  resources: ["pods"]
+  verbs: ["get", "watch", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  # "namespace" omitted since ClusterRoles are not namespaced
+  name: k8sexample-frontend-node-reader
+rules:
+- apiGroups: [""]
+  #
+  # at the HTTP level, the name of the resource for accessing Secret
+  # objects is "secrets"
+  resources: ["nodes"]
+  verbs: ["get", "watch", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+# This role binding allows "jane" to read pods in the "default" namespace.
+# You need to already have a Role named "pod-reader" in that namespace.
+kind: RoleBinding
+metadata:
+  name: k8sexample-frontend-read-pods
+  namespace: ingress-nginx
+subjects:
+# You can specify more than one "subject"
+- kind: ServiceAccount
+  name: k8sexample-frontend-sa # "name" is case sensitive
+  namespace: default
+  apiGroup: ""
+roleRef:
+  # "roleRef" specifies the binding to a Role / ClusterRole
+  kind: Role #this must be Role or ClusterRole
+  name: k8sexample-frontend-pod-reader # this must match the name of the Role or ClusterRole you wish to bind to
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: rbac.authorization.k8s.io/v1
+# This role binding allows "jane" to read pods in the "default" namespace.
+# You need to already have a Role named "pod-reader" in that namespace.
+kind: RoleBinding
+metadata:
+  name: k8sexample-frontend-read-pods
+  namespace: default
+subjects:
+# You can specify more than one "subject"
+- kind: ServiceAccount
+  name: k8sexample-frontend-sa # "name" is case sensitive
+  apiGroup: ""
+roleRef:
+  # "roleRef" specifies the binding to a Role / ClusterRole
+  kind: Role #this must be Role or ClusterRole
+  name: k8sexample-frontend-pod-reader # this must match the name of the Role or ClusterRole you wish to bind to
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: rbac.authorization.k8s.io/v1
+# This role binding allows "jane" to read pods in the "default" namespace.
+# You need to already have a Role named "pod-reader" in that namespace.
+kind: ClusterRoleBinding
+metadata:
+  name: k8sexample-frontend-read-nodes
+subjects:
+# You can specify more than one "subject"
+- kind: ServiceAccount
+  name: k8sexample-frontend-sa # "name" is case sensitive
+  namespace: default
+  apiGroup: ""
+roleRef:
+  # "roleRef" specifies the binding to a Role / ClusterRole
+  kind: ClusterRole #this must be Role or ClusterRole
+  name: k8sexample-frontend-node-reader # this must match the name of the Role or ClusterRole you wish to bind to
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+    name: k8sexample-frontend
+    labels:
+        app: k8sexample
+        role: frontend
+spec:
+    template:
+        metadata:
+            name: k8sexample-frontend
+            labels:
+                app: k8sexample
+                role: frontend
+        spec:
+            serviceAccountName: k8sexample-frontend-sa
+            containers:
+                - name: k8sexample-frontend
+                  image: registry/testfrontend:frontend-v65
+                  env:
+                    - name: ROLE
+                      value: frontend
+                    - name: INGRESS_NAMESPACE
+                      value: ingress-nginx
+                    - name: APP_LABEL
+                      value: app:k8sexample
+                    - name: INGRESS_LABEL
+                      value: app.kubernetes.io/name:ingress-nginx
+                    - name: BACKEND_A
+                      value: http://backend-a:3000
+                    - name: BACKEND_B
+                      value: http://backend-b:3000
+                    - name: MY_POD_NAMESPACE
+                      valueFrom:
+                        fieldRef:
+                          fieldPath: metadata.namespace
+                    - name: MY_POD_NAME
+                      valueFrom:
+                        fieldRef:
+                          fieldPath: metadata.name
+                    - name: MY_NODE_NAME
+                      valueFrom:
+                        fieldRef:
+                          fieldPath: spec.nodeName
+                  ports:
+                    - containerPort: 3000
+    selector:
+        matchLabels:
+            app: k8sexample
+            role: frontend
+    replicas: 3
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+    name: k8sexample-backend-a
+    labels:
+        app: k8sexample
+        role: backend-a
+spec:
+    template:
+        metadata:
+            name: k8sexample-backend-a
+            labels:
+                app: k8sexample
+                role: backend-a
+        spec:
+            containers:
+                - name: k8sexample-backend-a
+                  image: registry/testfrontend:v25
+                  env:
+                    - name: ROLE
+                      value: backend-a
+                    - name: MY_POD_NAMESPACE
+                      valueFrom:
+                        fieldRef:
+                          fieldPath: metadata.namespace
+                    - name: MY_POD_NAME
+                      valueFrom:
+                        fieldRef:
+                          fieldPath: metadata.name
+                    - name: MY_NODE_NAME
+                      valueFrom:
+                        fieldRef:
+                          fieldPath: spec.nodeName
+                  ports:
+                    - containerPort: 3000
+    selector:
+        matchLabels:
+            app: k8sexample
+            role: backend-a
+    replicas: 3
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+    name: k8sexample-backend-b
+    labels:
+        app: k8sexample
+        role: backend-b
+spec:
+    template:
+        metadata:
+            name: k8sexample-backend-b
+            labels:
+                app: k8sexample
+                role: backend-b
+        spec:
+            containers:
+                - name: k8sexample-backend-b
+                  image: registry/testfrontend:v25
+                  env:
+                    - name: ROLE
+                      value: backend-b
+                    - name: MY_POD_NAMESPACE
+                      valueFrom:
+                        fieldRef:
+                          fieldPath: metadata.namespace
+                    - name: MY_POD_NAME
+                      valueFrom:
+                        fieldRef:
+                          fieldPath: metadata.name
+                    - name: MY_NODE_NAME
+                      valueFrom:
+                        fieldRef:
+                          fieldPath: spec.nodeName
+                  ports:
+                    - containerPort: 3000
+    selector:
+        matchLabels:
+            app: k8sexample
+            role: backend-b
+    replicas: 3
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend
+  labels:
+    app: k8sexample
+    role: frontend
+spec:
+  selector:
+    app: k8sexample
+    role: frontend
+  ports:
+    - port: 3000
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend-a
+  labels:
+    app: k8sexample
+    role: backend-a
+spec:
+  selector:
+    app: k8sexample
+    role: backend-a
+  ports:
+    - port: 3000
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend-b
+  labels:
+    app: k8sexample
+    role: backend-b
+spec:
+  selector:
+    app: k8sexample
+    role: backend-b
+  ports:
+    - port: 3000
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: k8sexample
+  annotations:
+    kubernetes.io/ingress.class: "nginx"
+spec:
+  tls:
+  - hosts:
+      - k8sexample
+  rules:
+  - host: k8sexample
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: frontend
+            port:
+              number: 3000
